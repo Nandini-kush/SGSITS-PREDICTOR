@@ -7,7 +7,7 @@ import numpy as np
 # =========================
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-input_path = os.path.join(BASE_DIR, "backend", "data", "clean_dataset.csv")
+input_path = os.path.join(BASE_DIR, "processed", "final_dataset.csv")
 output_path = os.path.join(BASE_DIR, "backend", "data", "clean_data_final.csv")
 
 if not os.path.exists(input_path):
@@ -26,12 +26,13 @@ df.columns = df.columns.str.strip().str.lower()
 # =========================
 # 3. BRANCH CLEANING (SAFE - NO DATA LOSS)
 # =========================
-df["branch"] = df["branch"].astype(str).str.upper().str.strip()
+df["branch"] = df["branch"].astype(str).str.upper().str.replace(r"\s+", " ", regex=True).str.strip()
 
 branch_map = {
     "ELECTRONICS AND TELECOMMUNICATION": "ENTC",
     "ELECTRONICS AND TELECOMMUNICATIONS": "ENTC",
     "ELECTRONICS & TELECOMMUNICATION": "ENTC",
+    "ELECTRONICS AND TELECOMMUNIC ATIONS": "ENTC",
     "COMPUTER SCIENCE ENGINEERING": "CSE",
     "COMPUTER SCIENCE": "CSE",
     "INFORMATION TECHNOLOGY": "IT",

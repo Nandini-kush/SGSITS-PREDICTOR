@@ -3,7 +3,8 @@ import camelot
 import pandas as pd
 
 # Folder containing PDFs
-pdf_folder = "data/raw_pdfs"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+pdf_folder = os.path.join(BASE_DIR, "backend", "data", "raw_pdfs")
 
 # Store all cleaned data
 all_data = []
@@ -209,6 +210,8 @@ for pdf_file in os.listdir(pdf_folder):
                             "Category"
                         )
 
+
+
                 # Rename columns
                 df.rename(
                     columns=column_mapping,
@@ -243,7 +246,7 @@ for pdf_file in os.listdir(pdf_folder):
 
                     continue
 
-                # Keep useful columns
+                # Keep only required columns
                 df = df[
                     required_columns
                 ]
@@ -366,8 +369,9 @@ if len(all_data) > 0:
     )
 
     # Save dataset
+    output_csv = os.path.join(BASE_DIR, "processed", "final_dataset.csv")
     final_df.to_csv(
-        "processed/final_dataset.csv",
+        output_csv,
         index=False
     )
 

@@ -33,7 +33,7 @@ export default function App() {
 
     try {
       // Direct POST request to the real FastAPI backend endpoint
-      const response = await axios.post('http://127.0.0.1:8000/predict', formData, {
+      const response = await axios.post('http://127.0.0.1:8000/predict_all', formData, {
         headers: { 
           'Content-Type': 'application/json' 
         },
@@ -51,8 +51,21 @@ export default function App() {
 
     } catch (err) {
       console.error('API connection failed:', err);
+      let errorMsg = 'Backend server unavailable';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          errorMsg = detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+        } else if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else {
+          errorMsg = JSON.stringify(detail);
+        }
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
       setTimeout(() => {
-        setError('Backend server unavailable');
+        setError(errorMsg);
         setLoading(false);
       }, 1000);
     }
