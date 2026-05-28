@@ -15,7 +15,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
 sys.path.append(str(BASE_DIR))
 
-
 from feature_builder import FeatureBuilder
 
 # Initialize FastAPI App with premium Swagger metadata
