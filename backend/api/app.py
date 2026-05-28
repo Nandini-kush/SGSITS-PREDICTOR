@@ -6,17 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 import joblib
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 # ==========================================
 # 1. PYTHON PATH & IMPORTS CONFIG
 # ==========================================
-# Ensure the parent backend directory is in the Python search path to import backend components
+# Ensure the project root directory is in the Python search path to import backend components
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
-sys.path.append(str(BASE_DIR))
+sys.path.append(str(ROOT_DIR))
 
-
-from feature_builder import FeatureBuilder
+from backend.feature_builder import FeatureBuilder
 
 # Initialize FastAPI App with premium Swagger metadata
 app = FastAPI(
@@ -67,6 +67,7 @@ class PredictionPayload(BaseModel):
     gender: str = Field(..., description="Allotment gender (e.g. 'OP' for open pool or 'F' for female quota).", example="OP")
     year: int = Field(..., ge=2015, le=2026, description="Year to simulate cutoffs.", example=2025)
     branch: str = Field(..., description="Target engineering branch shortcode or name (e.g. 'CSE', 'IT', 'ENTC').", example="CSE")
+    home_state: str = Field("MP", description="Candidate home state / domicile.", example="MP")
 
     class Config:
         json_schema_extra = {
@@ -75,7 +76,26 @@ class PredictionPayload(BaseModel):
                 "category": "UR/X/OP",
                 "gender": "OP",
                 "year": 2025,
-                "branch": "CSE"
+                "branch": "CSE",
+                "home_state": "MP"
+            }
+        }
+
+class BulkPredictionPayload(BaseModel):
+    rank: int = Field(..., gt=0, description="Entrance exam merit rank (e.g. MP DTE / JEE Main).", example=35000)
+    category: str = Field(..., description="Seat allotment category (e.g. 'UR/X/OP', 'OBC/X/F', or main category 'UR', 'OBC').", example="UR/X/OP")
+    gender: str = Field(..., description="Allotment gender (e.g. 'OP' for open pool or 'F' for female quota).", example="OP")
+    year: int = Field(..., ge=2015, le=2026, description="Year to simulate cutoffs.", example=2025)
+    home_state: str = Field("MP", description="Candidate home state / domicile.", example="MP")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "rank": 35000,
+                "category": "UR/X/OP",
+                "gender": "OP",
+                "year": 2025,
+                "home_state": "MP"
             }
         }
 
@@ -115,10 +135,11 @@ def predict(payload: PredictionPayload):
             category=payload.category,
             gender=payload.gender,
             year=payload.year,
-            branch=payload.branch
+            branch=payload.branch,
+            home_state=payload.home_state
         )
 
-        prediction = model.predict(features_df)[0]
+        prediction = np.expm1(model.predict(features_df)[0])
 
         return {
             "predicted_closing_rank": int(prediction),
@@ -127,7 +148,8 @@ def predict(payload: PredictionPayload):
                 "category": payload.category,
                 "gender": payload.gender,
                 "year": payload.year,
-                "branch": payload.branch
+                "branch": payload.branch,
+                "home_state": payload.home_state
             },
             "status": "success"
         }
@@ -136,6 +158,64 @@ def predict(payload: PredictionPayload):
         raise HTTPException(
             status_code=500,
             detail=f"Prediction failed: {str(e)}"
+        )
+
+@app.post("/predict_all", tags=["ML Prediction"])
+def predict_all(payload: BulkPredictionPayload):
+    global model, feature_builder
+
+    if model is None or feature_builder is None:
+        if MODEL_PATH.exists() and FEATURE_BUILDER_PATH.exists():
+            model = joblib.load(MODEL_PATH)
+            feature_builder = joblib.load(FEATURE_BUILDER_PATH)
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="ML model or FeatureBuilder pipeline is not loaded."
+            )
+
+    try:
+        predictions = []
+        # Predict for all unique branches in the feature builder mapping
+        # Sort keys to ensure deterministic ordering
+        branches = sorted(feature_builder.unique_branches)
+        
+        for br in branches:
+            if br == "UNKNOWN":
+                continue
+            
+            features_df = feature_builder.transform_row(
+                rank=payload.rank,
+                category=payload.category,
+                gender=payload.gender,
+                year=payload.year,
+                branch=br,
+                home_state=payload.home_state
+            )
+            
+            pred = np.expm1(model.predict(features_df)[0])
+                
+            predictions.append({
+                "branch": br,
+                "predicted_closing_rank": int(pred)
+            })
+
+        return {
+            "predictions": predictions,
+            "input_parameters": {
+                "rank": payload.rank,
+                "category": payload.category,
+                "gender": payload.gender,
+                "year": payload.year,
+                "home_state": payload.home_state
+            },
+            "status": "success"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Bulk prediction failed: {str(e)}"
         )
 
 

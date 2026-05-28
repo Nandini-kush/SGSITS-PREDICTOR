@@ -16,23 +16,21 @@ const GENDERS = [
 
 const YEARS = [2026, 2025, 2024];
 
-const BRANCHES = [
-  { label: 'Computer Science & Engineering (CSE)', value: 'CSE' },
-  { label: 'Information Technology (IT)', value: 'IT' },
-  { label: 'Electronics & Telecommunication (ENTC)', value: 'ENTC' },
-  { label: 'Electrical Engineering (EE)', value: 'EE' },
-  { label: 'Mechanical Engineering (MECH)', value: 'MECH' },
-  { label: 'Civil Engineering (CE)', value: 'CE' },
-  { label: 'Electronics Instrumentation (EI)', value: 'EI' },
-];
-
 export default function PredictionForm({ onSubmit, loading }) {
   const [rank, setRank] = useState('');
   const [category, setCategory] = useState('UR');
   const [gender, setGender] = useState('OP');
   const [year, setYear] = useState(2026);
-  const [branch, setBranch] = useState('CSE');
+  const [homeState, setHomeState] = useState('MP');
+  const [feeWaiver, setFeeWaiver] = useState('NO');
   const [error, setError] = useState('');
+
+  const handleHomeStateChange = (val) => {
+    setHomeState(val);
+    if (val === 'OTHER') {
+      setCategory('UR');
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -43,10 +41,10 @@ export default function PredictionForm({ onSubmit, loading }) {
     setError('');
     onSubmit({
       rank: parseInt(rank),
-      category,
+      category: feeWaiver === 'YES' ? 'FW/OP' : category,
       gender,
       year: parseInt(year),
-      branch,
+      home_state: homeState,
     });
   };
 
@@ -84,6 +82,23 @@ export default function PredictionForm({ onSubmit, loading }) {
           {error && <p className="mt-2 text-sm text-red-500 font-medium">{error}</p>}
         </div>
 
+        {/* Domicile / Home State Group */}
+        <div>
+          <label htmlFor="domicile" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Domicile / Home State
+          </label>
+          <select
+            id="domicile"
+            value={homeState}
+            onChange={(e) => handleHomeStateChange(e.target.value)}
+            disabled={loading}
+            className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%221.67%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_16px_center] bg-no-repeat pr-12"
+          >
+            <option value="MP">Madhya Pradesh (MP Domicile)</option>
+            <option value="OTHER">Other State (All India Candidate)</option>
+          </select>
+        </div>
+
         {/* Category & Gender Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -94,8 +109,8 @@ export default function PredictionForm({ onSubmit, loading }) {
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              disabled={loading}
-              className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%221.67%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_16px_center] bg-no-repeat pr-12"
+              disabled={loading || homeState === 'OTHER'}
+              className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%221.67%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_16px_center] bg-no-repeat pr-12 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat.value} value={cat.value}>
@@ -103,6 +118,11 @@ export default function PredictionForm({ onSubmit, loading }) {
                 </option>
               ))}
             </select>
+            {homeState === 'OTHER' && (
+              <p className="mt-1.5 text-xs text-blue-500 font-semibold">
+                Other State candidates compete on All India (General/UR) seats only.
+              </p>
+            )}
           </div>
 
           <div>
@@ -125,11 +145,32 @@ export default function PredictionForm({ onSubmit, loading }) {
           </div>
         </div>
 
-        {/* Year & Preferred Branch Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1">
+        {/* Fee Waiver & Target Year Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label htmlFor="feeWaiver" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Fee Waiver (FW)
+            </label>
+            <select
+              id="feeWaiver"
+              value={feeWaiver}
+              onChange={(e) => setFeeWaiver(e.target.value)}
+              disabled={loading}
+              className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%221.67%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_16px_center] bg-no-repeat pr-12"
+            >
+              <option value="NO">No</option>
+              <option value="YES">Yes</option>
+            </select>
+            {feeWaiver === 'YES' && (
+              <p className="mt-1.5 text-xs text-emerald-600 font-semibold">
+                Fee Waiver cutoffs will be used (overrides category).
+              </p>
+            )}
+          </div>
+
+          <div>
             <label htmlFor="year" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Year
+              Target Year
             </label>
             <select
               id="year"
@@ -141,25 +182,6 @@ export default function PredictionForm({ onSubmit, loading }) {
               {YEARS.map((y) => (
                 <option key={y} value={y}>
                   {y}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label htmlFor="branch" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Preferred Branch
-            </label>
-            <select
-              id="branch"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              disabled={loading}
-              className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M5%207.5L10%2012.5L15%207.5%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%221.67%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px_20px] bg-[right_16px_center] bg-no-repeat pr-12"
-            >
-              {BRANCHES.map((br) => (
-                <option key={br.value} value={br.value}>
-                  {br.label}
                 </option>
               ))}
             </select>
