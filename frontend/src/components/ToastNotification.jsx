@@ -40,8 +40,8 @@ export default function ToastNotification({ message, onClose, onRetry }) {
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-red-800 font-display">Backend server unavailable</h3>
           <p className="text-sm text-slate-600 font-medium max-w-md mx-auto leading-relaxed">
-            The API server at <code className="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs">127.0.0.1:8000</code> is currently offline or unreachable.
-            Please verify that your local FastAPI server is running.
+            The API server at <code className="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs">https://sgsits-predictor.onrender.com</code> is currently offline or unreachable.
+            Please verify that the production backend is running.
           </p>
         </div>
         {onRetry && (

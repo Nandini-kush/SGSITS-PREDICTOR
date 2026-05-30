@@ -32,7 +32,7 @@ export default function App() {
 
     try {
       // Direct POST request to the real FastAPI backend endpoint
-      const response = await axios.post('http://127.0.0.1:8000/predict_all', formData, {
+      const response = await axios.post('https://sgsits-predictor.onrender.com/predict_all', formData, {
         headers: { 
           'Content-Type': 'application/json' 
         },
