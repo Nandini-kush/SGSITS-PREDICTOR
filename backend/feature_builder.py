@@ -1,25 +1,20 @@
 import pandas as pd
 import numpy as np
-import os
 
 class FeatureBuilder:
     """
     A unified, production-style feature engineering class for the SGSITS Predictor.
     It acts as the single source of truth for both model training and live API inference,
     ensuring that feature names, order, types, and encodings match 100% at all times.
+    Uses one-hot encoding for all categoricals, including Domicile, to prevent category grouping bugs.
     """
     def __init__(self):
-        # Mappings learned during .fit()
-        self.branch_map = {}
-        self.category_map = {}
-        self.quota_map = {}
-        self.min_year = 2015  # Fallback minimum year, overridden during fit()
-        
-        # Standardize branch names and map typical full forms to shortcodes
+        self.min_year = 2015
         self.branch_aliases = {
             "ELECTRONICS AND TELECOMMUNICATION": "ENTC",
             "ELECTRONICS AND TELECOMMUNICATIONS": "ENTC",
             "ELECTRONICS & TELECOMMUNICATION": "ENTC",
+            "ELECTRONICS AND TELECOMMUNIC ATIONS": "ENTC",
             "COMPUTER SCIENCE ENGINEERING": "CSE",
             "COMPUTER SCIENCE": "CSE",
             "INFORMATION TECHNOLOGY": "IT",
@@ -28,6 +23,14 @@ class FeatureBuilder:
             "ELECTRICAL ENGINEERING": "EE",
             "ELECTRONICS INSTRUMENTATION": "EI"
         }
+        
+        # Unique categories learned in fit()
+        self.unique_branches = []
+        self.unique_categories = []
+        self.unique_quotas = []
+        self.unique_genders = []
+        self.unique_domiciles = []
+        self.feature_columns = []
 
     def _normalize_category(self, cat: str) -> str:
         """Standardizes category nomenclature to match the clean training dataset."""
@@ -41,7 +44,8 @@ class FeatureBuilder:
 
     def _clean_branch(self, branch: str) -> str:
         """Cleans and standardizes the branch input using mapping aliases."""
-        branch = str(branch).strip().upper()
+        import re
+        branch = re.sub(r"\s+", " ", str(branch)).strip().upper()
         return self.branch_aliases.get(branch, branch)
 
     def _parse_category_parts(self, category_str: str, gender_input: str = "OP") -> tuple:
@@ -54,7 +58,7 @@ class FeatureBuilder:
         
         if "/" in category_str:
             parts = category_str.split("/")
-            parts += ["", "", ""]  # Safeguard list length
+            parts += ["", "", ""]
             main_cat = parts[0].strip()
             quota_val = parts[1].strip()
             gender_val = parts[2].strip()
@@ -63,10 +67,8 @@ class FeatureBuilder:
             quota_val = "GENERAL"
             gender_val = gender_input
 
-        # Normalize category
         main_cat = self._normalize_category(main_cat)
         
-        # Apply robust defaults for missing values
         if not main_cat or main_cat == "NAN":
             main_cat = "UR"
         if not quota_val or quota_val == "NAN":
@@ -81,34 +83,43 @@ class FeatureBuilder:
     def fit(self, df: pd.DataFrame):
         """
         Learns min_year and maps unique values for categorical features from the training dataset.
-        Guarantees that label encodings remain consistent during training and prediction.
         """
-        # Save training year baseline
         self.min_year = int(df["year"].min())
         
-        # Learn unique branches (sorted for determinism, add fallback)
-        unique_branches = sorted(df["branch"].dropna().astype(str).unique())
-        if "UNKNOWN" not in unique_branches:
-            unique_branches.append("UNKNOWN")
-        self.branch_map = {branch: idx for idx, branch in enumerate(unique_branches)}
+        # Learn branches
+        self.unique_branches = sorted(list(df["branch"].dropna().astype(str).unique()))
         
-        # Learn main category mapping
-        unique_categories = sorted(df["main_category"].dropna().astype(str).unique())
-        if "UR" not in unique_categories:
-            unique_categories.append("UR")
-        self.category_map = {cat: idx for idx, cat in enumerate(unique_categories)}
+        # Learn categories
+        df_parsed = df.copy()
+        if "main_category" not in df_parsed.columns or "quota" not in df_parsed.columns or "gender" not in df_parsed.columns:
+            parsed = df_parsed.apply(
+                lambda row: self._parse_category_parts(row.get("category", "UR"), row.get("gender", "OP")),
+                axis=1
+            )
+            df_parsed["main_category"] = [p[0] for p in parsed]
+            df_parsed["quota"] = [p[1] for p in parsed]
+            df_parsed["gender"] = [p[2] for p in parsed]
+            
+        self.unique_categories = sorted(list(df_parsed["main_category"].dropna().astype(str).unique()))
+        self.unique_quotas = sorted(list(df_parsed["quota"].dropna().astype(str).unique()))
+        self.unique_genders = sorted(list(df_parsed["gender"].dropna().astype(str).unique()))
+        self.unique_domiciles = sorted(list(df["domicile"].dropna().astype(str).unique())) if "domicile" in df.columns else ["Y", "AI"]
         
-        # Learn quota mappings
-        unique_quotas = sorted(df["quota"].dropna().astype(str).unique())
-        if "GENERAL" not in unique_quotas:
-            unique_quotas.append("GENERAL")
-        self.quota_map = {quota: idx for idx, quota in enumerate(unique_quotas)}
-        
-        print("FeatureBuilder successfully fitted:")
-        print(f"  Min Year: {self.min_year}")
-        print(f"  Branches mapped: {len(self.branch_map)}")
-        print(f"  Categories mapped: {len(self.category_map)}")
-        print(f"  Quotas mapped: {len(self.quota_map)}")
+        # Build list of feature columns
+        self.feature_columns = ["year", "year_normalized", "is_reserved", "is_female", "is_special_quota"]
+        for br in self.unique_branches:
+            self.feature_columns.append(f"branch_{br}")
+        for cat in self.unique_categories:
+            self.feature_columns.append(f"main_category_{cat}")
+        for gender in self.unique_genders:
+            self.feature_columns.append(f"gender_{gender}")
+        for q in self.unique_quotas:
+            self.feature_columns.append(f"quota_{q}")
+        for dom in self.unique_domiciles:
+            self.feature_columns.append(f"domicile_{dom}")
+            
+        print("FeatureBuilder fitted successfully with one-hot columns:")
+        print(f"Total features: {len(self.feature_columns)}")
         return self
 
     def transform_df(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -118,16 +129,11 @@ class FeatureBuilder:
         """
         transformed = df.copy()
         
-        # Clean branch names
         transformed["branch"] = transformed["branch"].apply(self._clean_branch)
         
-        # Parse raw category column if splits are not present
         if "main_category" not in transformed.columns or "quota" not in transformed.columns or "gender" not in transformed.columns:
             parsed = transformed.apply(
-                lambda row: self._parse_category_parts(
-                    row.get("category", "UR"), 
-                    row.get("gender", "OP")
-                ),
+                lambda row: self._parse_category_parts(row.get("category", "UR"), row.get("gender", "OP")),
                 axis=1
             )
             transformed["main_category"] = [p[0] for p in parsed]
@@ -138,7 +144,6 @@ class FeatureBuilder:
             transformed["gender"] = transformed["gender"].apply(lambda g: "F" if str(g).upper() in ["F", "FEMALE"] else "OP")
             transformed["quota"] = transformed["quota"].astype(str).str.strip().str.upper()
 
-        # Build clean boolean flags
         transformed["is_reserved"] = transformed["main_category"].apply(
             lambda x: 1 if x in ["SC", "ST", "OBC", "EWS"] else 0
         )
@@ -149,101 +154,74 @@ class FeatureBuilder:
             lambda x: 1 if x in ["S", "H", "NCC", "FF"] else 0
         )
 
-        # Apply label encoding maps with robust fallback to standard categories
-        transformed["branch_encoded"] = transformed["branch"].apply(
-            lambda x: self.branch_map.get(x, self.branch_map.get("UNKNOWN", 0))
-        )
-        transformed["main_category_encoded"] = transformed["main_category"].apply(
-            lambda x: self.category_map.get(x, self.category_map.get("UR", 0))
-        )
-        transformed["quota_encoded"] = transformed["quota"].apply(
-            lambda x: self.quota_map.get(x, self.quota_map.get("GENERAL", 0))
-        )
 
-        # Engineering continuous and interaction features
         transformed["year_normalized"] = transformed["year"] - self.min_year
-        transformed["log_opening_rank"] = np.log1p(transformed["opening_rank"])
-        
-        # Interactions
-        transformed["branch_year"] = transformed["branch_encoded"] * transformed["year_normalized"]
-        transformed["category_branch"] = transformed["main_category_encoded"] * transformed["branch_encoded"]
 
-        # Exact features returned in deterministic, fixed column order
-        features_list = [
-            "opening_rank",
-            "year",
-            "year_normalized",
-            "branch_encoded",
-            "main_category_encoded",
-            "quota_encoded",
-            "is_reserved",
-            "is_female",
-            "is_special_quota",
-            "log_opening_rank",
-            "branch_year",
-            "category_branch"
-        ]
-        
-        return transformed[features_list]
+        # Create one-hot columns
+        for br in self.unique_branches:
+            transformed[f"branch_{br}"] = (transformed["branch"] == br).astype(int)
+        for cat in self.unique_categories:
+            transformed[f"main_category_{cat}"] = (transformed["main_category"] == cat).astype(int)
+        for gender in self.unique_genders:
+            transformed[f"gender_{gender}"] = (transformed["gender"] == gender).astype(int)
+        for q in self.unique_quotas:
+            transformed[f"quota_{q}"] = (transformed["quota"] == q).astype(int)
+        for dom in self.unique_domiciles:
+            transformed[f"domicile_{dom}"] = (transformed["domicile"] == dom).astype(int) if "domicile" in transformed.columns else 0
 
-    def transform_row(self, rank: int, category: str, gender: str, year: int, branch: str) -> pd.DataFrame:
+        # Fill missing dummy columns with 0
+        for col in self.feature_columns:
+            if col not in transformed.columns:
+                transformed[col] = 0
+
+        return transformed[self.feature_columns]
+
+    def transform_row(self, rank: int, category: str, gender: str, year: int, branch: str, home_state: str = "MP") -> pd.DataFrame:
         """
         Transforms a single live inference API request into a single-row DataFrame.
-        Guarantees EXACT matching columns and encoding maps.
         """
-        # Clean branch
         clean_br = self._clean_branch(branch)
-        
-        # Parse category details
         main_cat, quota_val, gender_val = self._parse_category_parts(category, gender)
         
-        # Compute boolean flags
         is_reserved = 1 if main_cat in ["SC", "ST", "OBC", "EWS"] else 0
         is_female = 1 if gender_val == "F" else 0
         is_special_quota = 1 if quota_val in ["S", "H", "NCC", "FF"] else 0
         
-        # Encode categoricals using fitted maps
-        branch_encoded = self.branch_map.get(clean_br, self.branch_map.get("UNKNOWN", 0))
-        main_category_encoded = self.category_map.get(main_cat, self.category_map.get("UR", 0))
-        quota_encoded = self.quota_map.get(quota_val, self.quota_map.get("GENERAL", 0))
-        
-        # Compute normalized numeric values
         year_normalized = int(year) - self.min_year
-        log_opening_rank = np.log1p(float(rank))
-        
-        # Compute interactions
-        branch_year = branch_encoded * year_normalized
-        category_branch = main_category_encoded * branch_encoded
+        dom_val = 'AI' if str(home_state).upper() == 'OTHER' else 'Y'
         
         row_dict = {
-            "opening_rank": [float(rank)],
             "year": [int(year)],
             "year_normalized": [int(year_normalized)],
-            "branch_encoded": [int(branch_encoded)],
-            "main_category_encoded": [int(main_category_encoded)],
-            "quota_encoded": [int(quota_encoded)],
             "is_reserved": [int(is_reserved)],
             "is_female": [int(is_female)],
-            "is_special_quota": [int(is_special_quota)],
-            "log_opening_rank": [float(log_opening_rank)],
-            "branch_year": [int(branch_year)],
-            "category_branch": [int(category_branch)]
+            "is_special_quota": [int(is_special_quota)]
         }
         
-        features_list = [
-            "opening_rank",
-            "year",
-            "year_normalized",
-            "branch_encoded",
-            "main_category_encoded",
-            "quota_encoded",
-            "is_reserved",
-            "is_female",
-            "is_special_quota",
-            "log_opening_rank",
-            "branch_year",
-            "category_branch"
-        ]
-        
+        # Populate dummy variables
+        for br in self.unique_branches:
+            row_dict[f"branch_{br}"] = [1 if clean_br == br else 0]
+        for cat in self.unique_categories:
+            row_dict[f"main_category_{cat}"] = [1 if main_cat == cat else 0]
+        for g in self.unique_genders:
+            row_dict[f"gender_{g}"] = [1 if gender_val == g else 0]
+        for q in self.unique_quotas:
+            row_dict[f"quota_{q}"] = [1 if quota_val == q else 0]
+        for dom in self.unique_domiciles:
+            row_dict[f"domicile_{dom}"] = [1 if dom_val == dom else 0]
+            
         df = pd.DataFrame(row_dict)
-        return df[features_list]
+        return df[self.feature_columns]
+
+    def transform_now(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transforms an input DataFrame containing raw fields (e.g. from API payload)
+        into the fully engineered feature DataFrame.
+        """
+        transformed = df.copy()
+        if "domicile" not in transformed.columns and "home_state" in transformed.columns:
+            transformed["domicile"] = transformed["home_state"].apply(
+                lambda hs: 'AI' if str(hs).upper() == 'OTHER' else 'Y'
+            )
+        return self.transform_df(transformed)
+

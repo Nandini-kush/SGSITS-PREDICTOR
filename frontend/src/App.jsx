@@ -5,7 +5,6 @@ import {
   Cpu, 
   Database, 
   Zap, 
-  CheckCircle2, 
   ArrowRight 
 } from 'lucide-react';
 
@@ -33,7 +32,7 @@ export default function App() {
 
     try {
       // Direct POST request to the real FastAPI backend endpoint
-      const response = await axios.post('http://127.0.0.1:8000/predict', formData, {
+      const response = await axios.post('http://127.0.0.1:8000/predict_all', formData, {
         headers: { 
           'Content-Type': 'application/json' 
         },
@@ -51,8 +50,21 @@ export default function App() {
 
     } catch (err) {
       console.error('API connection failed:', err);
+      let errorMsg = 'Backend server unavailable';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          errorMsg = detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+        } else if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else {
+          errorMsg = JSON.stringify(detail);
+        }
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
       setTimeout(() => {
-        setError('Backend server unavailable');
+        setError(errorMsg);
         setLoading(false);
       }, 1000);
     }
@@ -242,65 +254,11 @@ export default function App() {
       </main>
 
       {/* FOOTER SECTION */}
-      <footer className="bg-slate-50 border-t border-slate-100 px-6 py-12 mt-12 text-slate-600 text-left">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-          
-          {/* Footer Logo & details */}
-          <div className="space-y-3 max-w-sm">
-            <div className="flex items-center gap-2">
-              <img 
-                src={sgsitsLogo} 
-                alt="SGSITS emblem footer" 
-                className="w-8 h-8 object-contain rounded-lg border border-slate-200 p-0.5 bg-white shadow-sm" 
-              />
-              <div className="leading-none text-left">
-                <h4 className="text-sm font-extrabold text-slate-800 tracking-tight font-display">SGSITS Predictor</h4>
-                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block mt-0.5">ML Admission Analytics</span>
-              </div>
-            </div>
-            <p className="text-xs font-semibold text-slate-400 leading-relaxed">
-              Final year engineering project at Shri G.S. Institute of Technology & Science, Indore.
-            </p>
-          </div>
-
-          {/* Social connect SVGs */}
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Connect</span>
-            <div className="flex items-center gap-3">
-              <a 
-                href="https://github.com" 
-                target="_blank" 
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-[1.02]"
-              >
-                <svg className="w-4 h-4 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-                  <path d="M9 18c-4.51 2-5-2-7-2" />
-                </svg>
-                GitHub
-              </a>
-              <a 
-                href="https://linkedin.com" 
-                target="_blank" 
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-[1.02]"
-              >
-                <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2-2v7h-4v-7a6 6 0 0 1 6-6z" />
-                  <rect width="4" height="12" x="2" y="9" rx="1" />
-                  <circle cx="4" cy="4" r="2" />
-                </svg>
-                LinkedIn
-              </a>
-            </div>
-          </div>
-
-          {/* Historical Trends Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50/50 border border-blue-100 text-blue-800 text-xs font-bold shadow-sm">
-            <CheckCircle2 className="w-4 h-4 text-blue-600" />
-            Based on historical cutoff trends
-          </div>
-
+      <footer className="bg-slate-50 border-t border-slate-100 px-6 py-8 mt-12 text-slate-500">
+        <div className="max-w-6xl mx-auto text-center">
+          <p className="text-[13px] sm:text-sm font-medium leading-relaxed tracking-[0.02em]">
+            Department of Information Technology, Shri G.S. Institute of Technology & Science, Indore.
+          </p>
         </div>
       </footer>
     </div>

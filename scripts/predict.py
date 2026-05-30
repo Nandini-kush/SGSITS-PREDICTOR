@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 import joblib
 from pathlib import Path
+import numpy as np
 
 # ==========================================
 # 1. PATH CONFIG & IMPORTS
@@ -34,22 +35,26 @@ print("[OK] Core ML components loaded successfully.\n")
 # ==========================================
 # 3. PREDICTION FUNCTION
 # ==========================================
-def predict_rank(rank: int, category: str, gender: str, year: int, branch: str) -> int:
+def predict_rank(rank: int, category: str, gender: str, year: int, branch: str, home_state: str = "MP") -> int:
     """
     Predicts the closing rank using the unified FeatureBuilder and model.
     Matches the FastAPI inference logic 100%.
     """
-    # Transform raw input using the shared FeatureBuilder
-    features_df = feature_builder.transform_row(
-        rank=rank,
-        category=category,
-        gender=gender,
-        year=year,
-        branch=branch
-    )
+    # Create input DataFrame
+    input_df = pd.DataFrame([{
+        "rank": rank,
+        "category": category,
+        "gender": gender,
+        "year": year,
+        "branch": branch,
+        "home_state": home_state
+    }])
     
-    # Predict using the trained Random Forest Regressor
-    prediction = model.predict(features_df)[0]
+    # Transform raw input using the shared FeatureBuilder
+    features_df = feature_builder.transform_now(input_df)
+    
+    # Predict using the trained model
+    prediction = np.expm1(model.predict(features_df)[0])
     return round(prediction)
 
 # ==========================================
